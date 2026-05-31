@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "网易云音乐歌单导出工具",
+  "version": "1.0.0",
+  "description": "一键导出网易云音乐歌单中的歌曲名、歌手及专辑信息，支持导出为 CSV、JSON 和 TXT 格式。",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://music.163.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://music.163.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_end"
+    }
+  ]
+}

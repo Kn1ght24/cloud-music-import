@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网易云音乐歌单导出</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-wrapper">
+        <div class="logo-circle">
+          <svg viewBox="0 0 24 24" width="24" height="24" class="logo-svg">
+            <path fill="currentColor" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="brand-info">
+        <h1>CloudMusic Exporter</h1>
+        <p class="subtitle">网易云音乐歌单导出</p>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <!-- Status Box -->
+      <section class="status-card" id="statusCard">
+        <div class="status-header">
+          <div class="status-indicator">
+            <span class="pulse-dot" id="pulseDot"></span>
+            <span class="status-text" id="statusText">正在检测网页状态...</span>
+          </div>
+        </div>
+        <div class="count-display">
+          <span class="count-num" id="songCount">0</span>
+          <span class="count-unit">首歌曲已解析</span>
+        </div>
+        <button class="btn btn-primary" id="btnAnalyze" disabled>
+          <span class="btn-text">一键解析当前页面</span>
+          <span class="btn-loader"></span>
+        </button>
+      </section>
+
+      <!-- Songs Selection Card -->
+      <section class="songs-list-card disabled" id="songsListCard">
+        <div class="list-header">
+          <label class="checkbox-container">
+            <input type="checkbox" id="chkSelectAll" checked>
+            <span class="checkbox-checkmark"></span>
+            <span class="checkbox-label" style="font-weight: 700; color: var(--text-main);">全选歌曲</span>
+          </label>
+          <button class="text-btn" id="btnInvertSelect">反选</button>
+        </div>
+        <div class="songs-list" id="songsContainer">
+          <!-- 动态渲染的歌曲项 -->
+        </div>
+      </section>
+
+      <!-- Export Settings -->
+      <section class="settings-card disabled" id="settingsCard">
+        <h2 class="section-title">导出配置</h2>
+        
+        <!-- Format Selector -->
+        <div class="form-group">
+          <label class="form-label">导出格式</label>
+          <div class="format-options">
+            <label class="format-radio-label">
+              <input type="radio" name="exportFormat" value="csv" checked id="radioCsv">
+              <span class="format-tab">
+                <span class="tab-title">CSV</span>
+                <span class="tab-desc">适合Excel</span>
+              </span>
+            </label>
+            <label class="format-radio-label">
+              <input type="radio" name="exportFormat" value="json" id="radioJson">
+              <span class="format-tab">
+                <span class="tab-title">JSON</span>
+                <span class="tab-desc">结构化数据</span>
+              </span>
+            </label>
+            <label class="format-radio-label">
+              <input type="radio" name="exportFormat" value="txt" id="radioTxt">
+              <span class="format-tab">
+                <span class="tab-title">TXT</span>
+                <span class="tab-desc">纯文本列表</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Filename Input -->
+        <div class="form-group">
+          <label class="form-label" for="filenameInput">自定义文件名</label>
+          <div class="input-wrapper">
+            <input type="text" id="filenameInput" class="form-input" placeholder="请输入导出的文件名" value="网易云歌单导出">
+            <span class="input-suffix" id="extensionSuffix">.csv</span>
+          </div>
+        </div>
+
+        <!-- Custom Options -->
+        <div class="form-group checkbox-group" id="csvOptionGroup">
+          <label class="checkbox-container">
+            <input type="checkbox" id="includeHeader" checked>
+            <span class="checkbox-checkmark"></span>
+            <span class="checkbox-label">在 CSV 中包含表头 (歌曲名, 歌手, 专辑)</span>
+          </label>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer Action -->
+    <footer class="app-footer">
+      <button class="btn btn-success btn-block" id="btnExport" disabled>
+        <svg viewBox="0 0 24 24" width="18" height="18" class="btn-icon">
+          <path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+        </svg>
+        <span>确认导出并下载</span>
+      </button>
+      <div class="tips-info" id="tipsText">温馨提示：请进入网易云音乐网页版歌单、排行榜或专辑页面使用。</div>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

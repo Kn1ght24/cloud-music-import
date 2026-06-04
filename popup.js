@@ -8,6 +8,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnAnalyze = document.getElementById("btnAnalyze");
   
   const songsListCard = document.getElementById("songsListCard");
+  const songSearchInput = document.getElementById("songSearchInput");
+  const btnSearchClear = document.getElementById("btnSearchClear");
   const chkSelectAll = document.getElementById("chkSelectAll");
   const btnInvertSelect = document.getElementById("btnInvertSelect");
   const songsContainer = document.getElementById("songsContainer");
@@ -18,9 +20,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const csvOptionGroup = document.getElementById("csvOptionGroup");
   const includeHeader = document.getElementById("includeHeader");
   const btnExport = document.getElementById("btnExport");
+  const btnCopy = document.getElementById("btnCopy");
   const tipsText = document.getElementById("tipsText");
   
-  // 临时存储解析出来的歌曲数据
+  // 临时存储解析出来的歌曲数据，包含选定状态 checked
   let parsedSongs = [];
   let playlistTitle = "";
 
@@ -62,7 +65,11 @@ document.addEventListener("DOMContentLoaded", () => {
   btnAnalyze.addEventListener("click", () => {
     btnAnalyze.classList.add("loading");
     btnAnalyze.setAttribute("disabled", "true");
-    setPageStatus("loading", "正在提取歌曲数据...");
+    setPageStatus("loading", "正在提取并自动加载滚动...");
+
+    // 重置搜索框
+    songSearchInput.value = "";
+    btnSearchClear.style.display = "none";
 
     // 向活动标签页发送消息
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -80,7 +87,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         if (response && response.success) {
-          parsedSongs = response.songs || [];
+          // 将歌曲转化为带有 checked 标志的对象数组
+          parsedSongs = (response.songs || []).map(song => ({
+            ...song,
+            checked: true
+          }));
           
           // 从网页标题提取一个默认文件名，净化多余后缀
           if (response.title) {
@@ -105,37 +116,69 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // 4. 全选复选框的事件监听
+  // 4. 搜索栏事件监听
+  songSearchInput.addEventListener("input", (e) => {
+    const query = e.target.value;
+    if (query) {
+      btnSearchClear.style.display = "flex";
+    } else {
+      btnSearchClear.style.display = "none";
+    }
+    renderSongsList(query);
+    updateSelectAllState();
+  });
+
+  btnSearchClear.addEventListener("click", () => {
+    songSearchInput.value = "";
+    btnSearchClear.style.display = "none";
+    renderSongsList("");
+    updateSelectAllState();
+    songSearchInput.focus();
+  });
+
+  // 5. 全选复选框的事件监听 (仅针对当前过滤可见的歌曲)
   chkSelectAll.addEventListener("change", (e) => {
     const isChecked = e.target.checked;
-    const items = songsContainer.querySelectorAll(".song-item");
-    items.forEach(item => {
-      const idx = item.getAttribute("data-index");
+    const query = songSearchInput.value;
+    const filtered = getFilteredSongs(query);
+    
+    filtered.forEach(song => {
+      song.checked = isChecked;
+      const idx = parsedSongs.indexOf(song);
       const chk = document.getElementById(`song-chk-${idx}`);
       if (chk) {
         chk.checked = isChecked;
-        if (isChecked) {
-          item.classList.add("song-item-checked");
-        } else {
-          item.classList.remove("song-item-checked");
+        const item = songsContainer.querySelector(`.song-item[data-index="${idx}"]`);
+        if (item) {
+          if (isChecked) {
+            item.classList.add("song-item-checked");
+          } else {
+            item.classList.remove("song-item-checked");
+          }
         }
       }
     });
     updateCountDisplay();
   });
 
-  // 5. 反选按钮的点击监听
+  // 6. 反选按钮的点击监听 (仅针对当前过滤可见的歌曲)
   btnInvertSelect.addEventListener("click", () => {
-    const items = songsContainer.querySelectorAll(".song-item");
-    items.forEach(item => {
-      const idx = item.getAttribute("data-index");
+    const query = songSearchInput.value;
+    const filtered = getFilteredSongs(query);
+    
+    filtered.forEach(song => {
+      song.checked = !song.checked;
+      const idx = parsedSongs.indexOf(song);
       const chk = document.getElementById(`song-chk-${idx}`);
       if (chk) {
-        chk.checked = !chk.checked;
-        if (chk.checked) {
-          item.classList.add("song-item-checked");
-        } else {
-          item.classList.remove("song-item-checked");
+        chk.checked = song.checked;
+        const item = songsContainer.querySelector(`.song-item[data-index="${idx}"]`);
+        if (item) {
+          if (song.checked) {
+            item.classList.add("song-item-checked");
+          } else {
+            item.classList.remove("song-item-checked");
+          }
         }
       }
     });
@@ -143,7 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateCountDisplay();
   });
 
-  // 6. 确认导出按钮点击事件
+  // 7. 确认导出按钮点击事件
   btnExport.addEventListener("click", () => {
     const selectedSongs = getSelectedSongs();
     if (selectedSongs.length === 0) {
@@ -174,6 +217,36 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // 成功状态反馈
     triggerExportSuccessEffect();
+  });
+
+  // 8. 复制到剪贴板按钮点击事件
+  btnCopy.addEventListener("click", () => {
+    const selectedSongs = getSelectedSongs();
+    if (selectedSongs.length === 0) {
+      showTip("请至少选择一首歌曲进行复制。", true);
+      return;
+    }
+
+    const format = document.querySelector('input[name="exportFormat"]:checked').value;
+    let content = "";
+    
+    if (format === "csv") {
+      content = convertToCSV(selectedSongs, includeHeader.checked);
+    } else if (format === "json") {
+      content = JSON.stringify(selectedSongs, null, 2);
+    } else if (format === "txt") {
+      content = convertToTXT(selectedSongs);
+    }
+
+    // 写入剪贴板
+    navigator.clipboard.writeText(content)
+      .then(() => {
+        triggerCopySuccessEffect();
+      })
+      .catch(err => {
+        console.error("复制失败:", err);
+        showTip("复制到剪贴板失败，请重试或直接下载文件。", true);
+      });
   });
 
   // --- 辅助逻辑与交互函数 ---
@@ -215,24 +288,28 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // 启用各个卡片面板
       songsListCard.classList.remove("disabled");
+      songSearchInput.removeAttribute("disabled");
       settingsCard.classList.remove("disabled");
       btnExport.removeAttribute("disabled");
+      btnCopy.removeAttribute("disabled");
       
       // 默认设置为全选
       chkSelectAll.checked = true;
       
       // 渲染歌曲列表
-      renderSongsList(songs);
+      renderSongsList("");
       
       // 更新选择计数
       updateCountDisplay();
       
-      showTip("解析成功！您可以勾选特定歌曲，设置格式后导出。");
+      showTip("解析成功！已自动加载完整列表。您可以勾选或搜索特定歌曲导出。");
     } else {
       setPageStatus("error", "未检测到歌曲");
       songsListCard.classList.add("disabled");
+      songSearchInput.setAttribute("disabled", "true");
       settingsCard.classList.add("disabled");
       btnExport.setAttribute("disabled", "true");
+      btnCopy.setAttribute("disabled", "true");
       songsContainer.innerHTML = "";
       songCount.textContent = "0";
       songCount.classList.remove("active");
@@ -245,8 +322,10 @@ document.addEventListener("DOMContentLoaded", () => {
     btnAnalyze.removeAttribute("disabled");
     setPageStatus("error", "解析出错");
     songsListCard.classList.add("disabled");
+    songSearchInput.setAttribute("disabled", "true");
     settingsCard.classList.add("disabled");
     btnExport.setAttribute("disabled", "true");
+    btnCopy.setAttribute("disabled", "true");
     songsContainer.innerHTML = "";
     songCount.textContent = "0";
     songCount.classList.remove("active");
@@ -254,19 +333,36 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * 过滤歌单列表
+   */
+  function getFilteredSongs(query) {
+    if (!query) return parsedSongs;
+    const cleanQuery = query.toLowerCase().trim();
+    return parsedSongs.filter(song => 
+      song.title.toLowerCase().includes(cleanQuery) || 
+      song.artist.toLowerCase().includes(cleanQuery) || 
+      song.album.toLowerCase().includes(cleanQuery)
+    );
+  }
+
+  /**
    * 渲染歌曲多选列表
    */
-  function renderSongsList(songs) {
+  function renderSongsList(query = "") {
     songsContainer.innerHTML = "";
+    const filtered = getFilteredSongs(query);
     
-    songs.forEach((song, index) => {
+    filtered.forEach((song) => {
+      // 获取该歌曲在原始 parsedSongs 中的索引位置
+      const originalIndex = parsedSongs.indexOf(song);
+      
       const item = document.createElement("div");
-      item.className = "song-item song-item-checked";
-      item.setAttribute("data-index", index);
+      item.className = `song-item ${song.checked ? 'song-item-checked' : ''}`;
+      item.setAttribute("data-index", originalIndex);
       
       item.innerHTML = `
         <label class="checkbox-container" style="pointer-events: none; margin: 0;">
-          <input type="checkbox" id="song-chk-${index}" checked>
+          <input type="checkbox" id="song-chk-${originalIndex}" ${song.checked ? 'checked' : ''}>
           <span class="checkbox-checkmark"></span>
         </label>
         <div class="song-details">
@@ -277,10 +373,11 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // 点击整行项目切换勾选状态
       item.addEventListener("click", () => {
-        const chk = document.getElementById(`song-chk-${index}`);
+        song.checked = !song.checked;
+        const chk = document.getElementById(`song-chk-${originalIndex}`);
         if (chk) {
-          chk.checked = !chk.checked;
-          if (chk.checked) {
+          chk.checked = song.checked;
+          if (song.checked) {
             item.classList.add("song-item-checked");
           } else {
             item.classList.remove("song-item-checked");
@@ -293,6 +390,15 @@ document.addEventListener("DOMContentLoaded", () => {
       
       songsContainer.appendChild(item);
     });
+
+    // 如果搜索结果为空
+    if (filtered.length === 0 && parsedSongs.length > 0) {
+      const noResult = document.createElement("div");
+      noResult.className = "tips-info";
+      noResult.style.padding = "20px 0";
+      noResult.textContent = "未找到符合过滤条件的歌曲";
+      songsContainer.appendChild(noResult);
+    }
   }
 
   /**
@@ -305,28 +411,28 @@ document.addEventListener("DOMContentLoaded", () => {
     if (selectedCount > 0) {
       songCount.classList.add("active");
       btnExport.removeAttribute("disabled");
-      showTip(`已勾选 ${selectedCount} / ${parsedSongs.length} 首歌曲，配置完成后可点击确认导出。`);
+      btnCopy.removeAttribute("disabled");
+      showTip(`已勾选 ${selectedCount} / ${parsedSongs.length} 首歌曲，配置完成后可导出或复制。`);
     } else {
       songCount.classList.remove("active");
       btnExport.setAttribute("disabled", "true");
-      showTip("请至少勾选一首歌曲进行导出！", true);
+      btnCopy.setAttribute("disabled", "true");
+      showTip("请至少勾选一首歌曲进行操作！", true);
     }
   }
 
   /**
-   * 判断并更新全选复选框的状态
+   * 判断并更新全选复选框的状态 (针对当前过滤的歌曲)
    */
   function updateSelectAllState() {
-    const checkboxes = songsContainer.querySelectorAll('input[type="checkbox"]');
-    if (checkboxes.length === 0) return;
+    const query = songSearchInput.value;
+    const filtered = getFilteredSongs(query);
+    if (filtered.length === 0) {
+      chkSelectAll.checked = false;
+      return;
+    }
     
-    let allChecked = true;
-    checkboxes.forEach(chk => {
-      if (!chk.checked) {
-        allChecked = false;
-      }
-    });
-    
+    const allChecked = filtered.every(song => song.checked);
     chkSelectAll.checked = allChecked;
   }
 
@@ -334,14 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * 获取所有被勾选的歌曲数据
    */
   function getSelectedSongs() {
-    const selected = [];
-    parsedSongs.forEach((song, idx) => {
-      const chk = document.getElementById(`song-chk-${idx}`);
-      if (chk && chk.checked) {
-        selected.push(song);
-      }
-    });
-    return selected;
+    return parsedSongs.filter(song => song.checked);
   }
 
   /**
@@ -429,12 +528,34 @@ document.addEventListener("DOMContentLoaded", () => {
       <svg viewBox="0 0 24 24" width="18" height="18" class="btn-icon">
         <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
       </svg>
-      <span>导出成功并下载！</span>
+      <span>已下载！</span>
     `;
     
     setTimeout(() => {
       btnExport.style.background = "";
       btnExport.innerHTML = originalContent;
+    }, 2000);
+  }
+
+  /**
+   * 触发复制按钮成功状态效果
+   */
+  function triggerCopySuccessEffect() {
+    const originalContent = btnCopy.innerHTML;
+    
+    btnCopy.style.background = "var(--success-gradient)";
+    btnCopy.style.borderColor = "transparent";
+    btnCopy.innerHTML = `
+      <svg viewBox="0 0 24 24" width="18" height="18" class="btn-icon">
+        <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+      </svg>
+      <span>已复制！</span>
+    `;
+    
+    setTimeout(() => {
+      btnCopy.style.background = "";
+      btnCopy.style.borderColor = "";
+      btnCopy.innerHTML = originalContent;
     }, 2000);
   }
 });

@@ -1,33 +1,34 @@
 // 监听来自扩展 Popup 的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "EXTRACT_SONGS") {
-    try {
-      const songs = parsePlaylist();
-      sendResponse({ 
-        success: true, 
-        songs: songs, 
-        url: window.location.href,
-        title: document.title
+    // 异步执行自动滚动和提取
+    scrollAndExtractSongs()
+      .then((songs) => {
+        sendResponse({ 
+          success: true, 
+          songs: songs, 
+          url: window.location.href,
+          title: document.title
+        });
+      })
+      .catch((error) => {
+        sendResponse({ 
+          success: false, 
+          error: error.message 
+        });
       });
-    } catch (error) {
-      sendResponse({ 
-        success: false, 
-        error: error.message 
-      });
-    }
   }
   return true; // 保持通道开启以进行异步响应
 });
 
 /**
- * 解析网易云音乐网页中的歌单表格
+ * 自动滚动网页并提取网易云音乐网页中的歌单表格，处理懒加载问题
  */
-function parsePlaylist() {
-  const songs = [];
+async function scrollAndExtractSongs() {
   let targetDoc = document;
+  let targetWindow = window;
   
   // 网易云网页版核心内容通常嵌套在 id 为 g_iframe 的 iframe 中。
-  // 如果当前运行在顶层窗口，我们需要穿透 iframe 去获取真正的文档 DOM。
   const iframe = document.getElementById('g_iframe') || 
                  document.querySelector('iframe[name="contentFrame"]') || 
                  document.querySelector('iframe');
@@ -37,9 +38,74 @@ function parsePlaylist() {
       const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
       if (iframeDoc && iframeDoc.querySelector('table.m-table')) {
         targetDoc = iframeDoc;
+        targetWindow = iframe.contentWindow;
       }
     } catch (e) {
-      console.warn("无法直接访问网易云音乐的 iframe DOM (可能是跨域或未加载):", e);
+      console.warn("无法直接访问网易云音乐的 iframe DOM:", e);
+    }
+  }
+  
+  // 如果页面上没有表格，就无需滚动直接返回
+  const table = targetDoc.querySelector('table.m-table');
+  if (!table) {
+    return [];
+  }
+  
+  let lastRowCount = 0;
+  let noChangeTimes = 0;
+  const maxScrollAttempts = 25; // 最多滚动 25 次
+  
+  for (let i = 0; i < maxScrollAttempts; i++) {
+    const currentRows = table.querySelectorAll('tbody tr').length;
+    
+    // 判断是否有新的行被渲染
+    if (currentRows === lastRowCount) {
+      noChangeTimes++;
+      if (noChangeTimes >= 2) {
+        // 连续两次没有新数据，说明全部加载完毕
+        break;
+      }
+    } else {
+      noChangeTimes = 0;
+      lastRowCount = currentRows;
+    }
+    
+    // 滚动 iframe 窗口到底部
+    if (targetWindow && targetWindow.scrollTo) {
+      targetWindow.scrollTo(0, targetDoc.body.scrollHeight || targetDoc.documentElement.scrollHeight);
+    }
+    // 同时滚动主窗口以防万一
+    window.scrollTo(0, document.body.scrollHeight || document.documentElement.scrollHeight);
+    
+    // 等待 350ms 触发网易云音乐的懒加载和网络加载渲染
+    await new Promise(resolve => setTimeout(resolve, 350));
+  }
+  
+  // 滚动结束，提取歌曲
+  return parsePlaylist(targetDoc);
+}
+
+/**
+ * 解析网易云音乐网页中的歌单表格
+ */
+function parsePlaylist(targetDoc = document) {
+  const songs = [];
+  
+  // 如果传入 document 且存在 iframe，则获取 iframe 的 document
+  if (targetDoc === document) {
+    const iframe = document.getElementById('g_iframe') || 
+                   document.querySelector('iframe[name="contentFrame"]') || 
+                   document.querySelector('iframe');
+    
+    if (iframe) {
+      try {
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        if (iframeDoc && iframeDoc.querySelector('table.m-table')) {
+          targetDoc = iframeDoc;
+        }
+      } catch (e) {
+        console.warn("无法直接访问网易云音乐的 iframe DOM (可能是跨域或未加载):", e);
+      }
     }
   }
   

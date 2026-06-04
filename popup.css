@@ -443,6 +443,32 @@ body {
   cursor: not-allowed;
 }
 
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-light);
+  color: var(--text-main);
+  border-radius: var(--btn-radius);
+  padding: 14px 10px;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn-secondary:disabled {
+  background: #192027;
+  color: #3b4550;
+  border-color: transparent;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .btn-icon {
   transition: transform 0.3s ease;
 }
@@ -457,6 +483,13 @@ body {
   flex-direction: column;
   gap: 12px;
   margin-top: 4px;
+}
+
+.footer-btn-group {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 8px;
+  width: 100%;
 }
 
 .tips-info {
@@ -536,7 +569,69 @@ body {
   transition: var(--transition-smooth);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+}
+
+/* Search Box Inside Card */
+.search-box-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.search-input {
+  width: 100%;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 8px 32px 8px 30px;
+  color: var(--text-main);
+  font-size: 11px;
+  font-weight: 500;
+  outline: none;
+  transition: var(--transition-smooth);
+}
+
+.search-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 8px rgba(255, 65, 65, 0.20);
+  background-color: rgba(30, 36, 48, 0.7);
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+  transition: var(--transition-smooth);
+}
+
+.search-input:focus ~ .search-icon,
+.search-input:not(:placeholder-shown) ~ .search-icon {
+  color: var(--primary-color);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 50%;
+  transition: var(--transition-smooth);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.search-clear-btn:hover {
+  color: var(--text-main);
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 .songs-list-card.disabled {

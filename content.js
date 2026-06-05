@@ -36,7 +36,8 @@ async function scrollAndExtractSongs() {
   if (iframe) {
     try {
       const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-      if (iframeDoc && iframeDoc.querySelector('table.m-table')) {
+      // 兼容歌单表格 table.m-table 和个人听歌排行容器 .m-record
+      if (iframeDoc && (iframeDoc.querySelector('table.m-table') || iframeDoc.querySelector('.m-record'))) {
         targetDoc = iframeDoc;
         targetWindow = iframe.contentWindow;
       }
@@ -45,9 +46,10 @@ async function scrollAndExtractSongs() {
     }
   }
   
-  // 如果页面上没有表格，就无需滚动直接返回
+  // 如果页面上既没有表格也没有听歌排行记录，就无需滚动直接返回
   const table = targetDoc.querySelector('table.m-table');
-  if (!table) {
+  const recordList = targetDoc.querySelector('.m-record');
+  if (!table && !recordList) {
     return [];
   }
   
@@ -56,7 +58,12 @@ async function scrollAndExtractSongs() {
   const maxScrollAttempts = 25; // 最多滚动 25 次
   
   for (let i = 0; i < maxScrollAttempts; i++) {
-    const currentRows = table.querySelectorAll('tbody tr').length;
+    let currentRows = 0;
+    if (table) {
+      currentRows = table.querySelectorAll('tbody tr').length;
+    } else if (recordList) {
+      currentRows = recordList.querySelectorAll('li').length;
+    }
     
     // 判断是否有新的行被渲染
     if (currentRows === lastRowCount) {
@@ -100,7 +107,8 @@ function parsePlaylist(targetDoc = document) {
     if (iframe) {
       try {
         const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        if (iframeDoc && iframeDoc.querySelector('table.m-table')) {
+        // 支持歌单表格和个人听歌排行列表的 iframe 解析
+        if (iframeDoc && (iframeDoc.querySelector('table.m-table') || iframeDoc.querySelector('.m-record'))) {
           targetDoc = iframeDoc;
         }
       } catch (e) {
@@ -109,7 +117,63 @@ function parsePlaylist(targetDoc = document) {
     }
   }
   
-  // 网易云音乐歌单、排行榜和专辑的歌曲列表表格通常是 table.m-table
+  // 1. 优先解析个人听歌排行 (m-record) 结构
+  const recordList = targetDoc.querySelector('.m-record');
+  if (recordList) {
+    const items = recordList.querySelectorAll('li');
+    items.forEach((item) => {
+      let title = "";
+      let artists = [];
+      let album = "个人听歌排行"; // 个人排行默认没有专辑名，置为默认标识
+      
+      // 提取歌曲标题，通常在 <b> 标签中，或含有 song?id= 的 a 标签
+      const bTag = item.querySelector('b');
+      if (bTag) {
+        title = bTag.getAttribute('title') || bTag.innerText;
+      } else {
+        const songLink = item.querySelector('a[href*="/song?id="]');
+        if (songLink) {
+          title = songLink.getAttribute('title') || songLink.innerText;
+        }
+      }
+      
+      // 提取歌手，通常在 s-fc8 标签、ar 容器中，或在链接内
+      const artistEl = item.querySelector('.s-fc8') || item.querySelector('.ar') || item.querySelector('span.ar');
+      if (artistEl) {
+        const artistLinks = artistEl.querySelectorAll('a[href*="/artist?id="]');
+        if (artistLinks && artistLinks.length > 0) {
+          artistLinks.forEach(link => {
+            artists.push(link.getAttribute('title') || link.innerText);
+          });
+        } else {
+          artists.push(artistEl.getAttribute('title') || artistEl.innerText);
+        }
+      } else {
+        const artistLinks = item.querySelectorAll('a[href*="/artist?id="]');
+        if (artistLinks && artistLinks.length > 0) {
+          artistLinks.forEach(link => {
+            artists.push(link.getAttribute('title') || link.innerText);
+          });
+        }
+      }
+      
+      // 清理数据
+      title = cleanText(title);
+      const artistStr = artists.map(a => cleanText(a)).filter(Boolean).join(' / ');
+      
+      if (title) {
+        songs.push({
+          title: title,
+          artist: artistStr || "未知歌手",
+          album: album
+        });
+      }
+    });
+    
+    return songs;
+  }
+  
+  // 2. 解析网易云音乐常规歌单、排行榜和专辑的表格 (table.m-table) 结构
   const table = targetDoc.querySelector('table.m-table');
   if (!table) {
     return songs;

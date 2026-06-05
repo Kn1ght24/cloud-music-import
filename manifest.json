@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "网易云音乐歌单导出工具",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "一键导出网易云音乐歌单中的歌曲名、歌手及专辑信息，支持导出为 CSV、JSON 和 TXT 格式。",
   "permissions": [
     "activeTab",

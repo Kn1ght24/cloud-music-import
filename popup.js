@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const statusText = document.getElementById("statusText");
   const songCount = document.getElementById("songCount");
   const btnAnalyze = document.getElementById("btnAnalyze");
+  const btnOpenTab = document.getElementById("btnOpenTab");
   
   const songsListCard = document.getElementById("songsListCard");
   const songSearchInput = document.getElementById("songSearchInput");
@@ -27,23 +28,55 @@ document.addEventListener("DOMContentLoaded", () => {
   let parsedSongs = [];
   let playlistTitle = "";
 
-  // 1. 初始化检查当前标签页 URL 状态
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (tabs && tabs.length > 0) {
-      const activeTab = tabs[0];
-      const url = activeTab.url || "";
-      
-      // 判断是否在网易云音乐域名下
-      if (url.includes("music.163.com")) {
-        setPageStatus("ready", "已连接网易云音乐页面");
-        btnAnalyze.removeAttribute("disabled");
-      } else {
-        setPageStatus("error", "请进入网易云音乐");
-        btnAnalyze.setAttribute("disabled", "true");
-        showTip("请在网易云音乐网页版歌单、排行榜或专辑页面使用此插件。", true);
+  // 辅助函数：跨窗口寻找可用的网易云音乐页面标签页
+  function findNetEaseTab(callback) {
+    // 1. 优先在当前窗口查询 active 标签页
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs && tabs.length > 0) {
+        const activeTab = tabs[0];
+        if (activeTab.url && activeTab.url.includes("music.163.com")) {
+          callback(activeTab);
+          return;
+        }
       }
+      
+      // 2. 如果当前活跃标签不是网易云（如插件在独立新 Tab 模式下打开），则在所有窗口中寻找包含 music.163.com 的标签页
+      chrome.tabs.query({ url: "*://*.music.163.com/*" }, (allTabs) => {
+        if (allTabs && allTabs.length > 0) {
+          // 优先取其中在各自窗口中处于 active 状态的，或者直接取第一个
+          const activeOnes = allTabs.filter(t => t.active);
+          callback(activeOnes.length > 0 ? activeOnes[0] : allTabs[0]);
+        } else {
+          callback(null);
+        }
+      });
+    });
+  }
+
+  // 1. 初始化检查当前标签页 URL 状态
+  findNetEaseTab((targetTab) => {
+    if (targetTab) {
+      setPageStatus("ready", "已连接网易云音乐页面");
+      btnAnalyze.removeAttribute("disabled");
+    } else {
+      setPageStatus("error", "请打开网易云音乐");
+      btnAnalyze.setAttribute("disabled", "true");
+      showTip("请在浏览器中打开网易云音乐网页版歌单、排行榜或专辑详情页后使用此插件。", true);
     }
   });
+
+  // 独立标签页打开功能绑定
+  if (btnOpenTab) {
+    btnOpenTab.addEventListener("click", () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL("popup.html") });
+    });
+    
+    // 如果插件当前本身正作为独立的 Tab 页面运行，则隐藏此按钮
+    const url = window.location.href;
+    if (url.startsWith("chrome-extension://") && !url.includes("popup.html?popup=true")) {
+      btnOpenTab.style.display = "none";
+    }
+  }
 
   // 2. 格式选择单选框的事件监听
   const formatRadioButtons = document.querySelectorAll('input[name="exportFormat"]');
@@ -71,14 +104,14 @@ document.addEventListener("DOMContentLoaded", () => {
     songSearchInput.value = "";
     btnSearchClear.style.display = "none";
 
-    // 向活动标签页发送消息
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (!tabs || tabs.length === 0) {
-        handleAnalyzeError("无法获取当前活动标签页");
+    // 寻找可用的网易云页面并发送提取歌曲命令
+    findNetEaseTab((targetTab) => {
+      if (!targetTab) {
+        handleAnalyzeError("未检测到运行中的网易云音乐页面，请先打开网易云。");
         return;
       }
       
-      chrome.tabs.sendMessage(tabs[0].id, { action: "EXTRACT_SONGS" }, (response) => {
+      chrome.tabs.sendMessage(targetTab.id, { action: "EXTRACT_SONGS" }, (response) => {
         // 检查通信是否出错 (例如 content script 未加载完毕)
         if (chrome.runtime.lastError) {
           handleAnalyzeError("未检测到歌单数据。请刷新网页后，重新打开本插件重试。");
@@ -202,7 +235,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let mimeType = "text/plain";
     
     if (format === "csv") {
-      fileContent = convertToCSV(selectedSongs, includeHeader.checked);
+      // 在下载 CSV 文件时拼接前置 BOM \ufeff 标志，以便 Excel 识别不产生中文乱码
+      fileContent = "\ufeff" + convertToCSV(selectedSongs, includeHeader.checked);
       mimeType = "text/csv;charset=utf-8;";
     } else if (format === "json") {
       fileContent = JSON.stringify(selectedSongs, null, 2);
@@ -231,6 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let content = "";
     
     if (format === "csv") {
+      // 剪贴板复制不能带 \ufeff 标志，否则粘贴在应用里会出现不可见的乱码首字符
       content = convertToCSV(selectedSongs, includeHeader.checked);
     } else if (format === "json") {
       content = JSON.stringify(selectedSongs, null, 2);
@@ -457,7 +492,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * 将歌曲数组转换为 CSV 格式 (带双引号转义，防乱码)
+   * 将歌曲数组转换为 CSV 格式 (带双引号转义，无 BOM 前缀)
    */
   function convertToCSV(songs, withHeader) {
     const csvRows = [];
@@ -474,7 +509,7 @@ document.addEventListener("DOMContentLoaded", () => {
       csvRows.push(`"${title}","${artist}","${album}"`);
     });
     
-    return "\ufeff" + csvRows.join("\n");
+    return csvRows.join("\n");
   }
 
   /**

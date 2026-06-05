@@ -28,7 +28,7 @@ body {
   font-family: 'Outfit', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-main);
-  width: 360px;
+  width: 460px;
   min-height: 480px;
   display: flex;
   justify-content: center;
@@ -50,8 +50,41 @@ body {
 .app-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  width: 100%;
   padding-bottom: 4px;
+}
+
+.brand-info {
+  flex-grow: 1;
+  margin-left: 12px;
+}
+
+.icon-action-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  outline: none;
+}
+
+.icon-action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-main);
+  transform: scale(1.05);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+}
+
+.icon-action-btn:active {
+  transform: scale(0.95);
 }
 
 .logo-wrapper {
@@ -672,7 +705,7 @@ body {
 
 /* Songs Scroll List */
 .songs-list {
-  max-height: 160px;
+  max-height: 260px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

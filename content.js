@@ -126,60 +126,111 @@ function parsePlaylist(targetDoc = document) {
     // 方案 A: 严格基于表格列索引解析（最精准，避免各列链接混淆）
     if (cells && cells.length >= 4) {
       // 1. 歌曲标题通常在第 2 列 (index 1)
-      const titleLink = cells[1].querySelector('a[href*="/song?id="]');
-      if (titleLink) {
-        // 网易云有些歌曲名在 a 内部的 b 标签中，带有 title 属性
-        const bTag = titleLink.querySelector('b');
-        if (bTag) {
-          title = bTag.getAttribute('title') || bTag.innerText;
-        } else {
-          title = titleLink.getAttribute('title') || titleLink.innerText;
+      const titleDiv = cells[1].querySelector('div.ttc span.txt');
+      if (titleDiv) {
+        const titleLink = titleDiv.querySelector('a[href*="/song?id="]');
+        if (titleLink) {
+          // 用 b 标签的 title 或 innerText 作为主歌名，这可以避免播放按钮、MV图标文本混入
+          const bTag = titleLink.querySelector('b');
+          title = bTag ? (bTag.getAttribute('title') || bTag.innerText) : (titleLink.getAttribute('title') || titleLink.innerText);
+          
+          // 检查并拼接副标题或翻译名 (如 " - (Live)")
+          const subTitleSpan = titleDiv.querySelector('.s-fc3');
+          if (subTitleSpan) {
+            const subText = subTitleSpan.innerText.trim();
+            if (subText) title += " " + subText;
+          }
         }
-      } else {
-        // 降级使用文本
+      }
+      
+      if (!title) {
         title = cells[1].innerText;
       }
       
       // 2. 歌手通常在第 4 列 (index 3)
-      const artistLinks = cells[3].querySelectorAll('a[href*="/artist?id="]');
-      if (artistLinks && artistLinks.length > 0) {
-        artistLinks.forEach(link => {
-          if (link.innerText) artists.push(link.innerText);
-        });
+      const artistDiv = cells[3].querySelector('div.text');
+      if (artistDiv) {
+        // 网易云直接把拼接好的歌手文本存放在 title 属性中，如 "歌手1/歌手2"
+        const artistAttr = artistDiv.getAttribute('title');
+        if (artistAttr) {
+          artists.push(artistAttr);
+        } else {
+          const artistLinks = artistDiv.querySelectorAll('a[href*="/artist?id="]');
+          if (artistLinks && artistLinks.length > 0) {
+            artistLinks.forEach(link => {
+              if (link.innerText) artists.push(link.innerText);
+            });
+          } else {
+            artists.push(artistDiv.innerText);
+          }
+        }
       } else {
-        // 如果没有链接但有文本（例如没有歌手主页）
-        const text = cells[3].innerText;
-        if (text) artists.push(text);
+        const artistLinks = cells[3].querySelectorAll('a[href*="/artist?id="]');
+        if (artistLinks && artistLinks.length > 0) {
+          artistLinks.forEach(link => {
+            if (link.innerText) artists.push(link.innerText);
+          });
+        } else {
+          const text = cells[3].innerText;
+          if (text) artists.push(text);
+        }
       }
       
       // 3. 专辑通常在第 5 列 (index 4)
       if (cells.length >= 5) {
-        const albumLink = cells[4].querySelector('a[href*="/album?id="]');
-        if (albumLink) {
-          album = albumLink.getAttribute('title') || albumLink.innerText;
+        const albumDiv = cells[4].querySelector('div.text');
+        if (albumDiv) {
+          album = albumDiv.getAttribute('title') || albumDiv.innerText;
         } else {
-          album = cells[4].innerText;
+          const albumLink = cells[4].querySelector('a[href*="/album?id="]');
+          if (albumLink) {
+            album = albumLink.getAttribute('title') || albumLink.innerText;
+          } else {
+            album = cells[4].innerText;
+          }
         }
       }
     } else {
       // 方案 B: 降级方案，直接在整行中匹配关键类名或链接特征
-      // 匹配歌曲链接
       const titleLink = row.querySelector('a[href*="/song?id="]');
       if (titleLink) {
         const bTag = titleLink.querySelector('b');
         title = bTag ? (bTag.getAttribute('title') || bTag.innerText) : titleLink.innerText;
+        
+        // 查找可能存在的副标题
+        const subTitleSpan = row.querySelector('.s-fc3');
+        if (subTitleSpan) {
+          const subText = subTitleSpan.innerText.trim();
+          if (subText) title += " " + subText;
+        }
       }
       
-      // 匹配歌手链接
-      const artistLinks = row.querySelectorAll('a[href*="/artist?id="]');
-      artistLinks.forEach(link => {
-        if (link.innerText) artists.push(link.innerText);
-      });
+      const artistDiv = row.querySelector('td:nth-child(4) div.text');
+      if (artistDiv) {
+        const artistAttr = artistDiv.getAttribute('title');
+        if (artistAttr) {
+          artists.push(artistAttr);
+        } else {
+          const artistLinks = artistDiv.querySelectorAll('a[href*="/artist?id="]');
+          artistLinks.forEach(link => {
+            if (link.innerText) artists.push(link.innerText);
+          });
+        }
+      } else {
+        const artistLinks = row.querySelectorAll('a[href*="/artist?id="]');
+        artistLinks.forEach(link => {
+          if (link.innerText) artists.push(link.innerText);
+        });
+      }
       
-      // 匹配专辑链接
-      const albumLink = row.querySelector('a[href*="/album?id="]');
-      if (albumLink) {
-        album = albumLink.innerText;
+      const albumDiv = row.querySelector('td:nth-child(5) div.text');
+      if (albumDiv) {
+        album = albumDiv.getAttribute('title') || albumDiv.innerText;
+      } else {
+        const albumLink = row.querySelector('a[href*="/album?id="]');
+        if (albumLink) {
+          album = albumLink.innerText;
+        }
       }
     }
     

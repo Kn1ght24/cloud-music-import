@@ -150,8 +150,15 @@ function parsePlaylist(targetDoc = document) {
       // 2. 歌手通常在第 4 列 (index 3)
       const artistDiv = cells[3].querySelector('div.text');
       if (artistDiv) {
-        // 网易云直接把拼接好的歌手文本存放在 title 属性中，如 "歌手1/歌手2"
-        const artistAttr = artistDiv.getAttribute('title');
+        // 兼容：网易云把拼接好的歌手文本存放在 title 属性中（如 "歌手1/歌手2"），可能在 div.text 上，也可能在子元素 span 上
+        let artistAttr = artistDiv.getAttribute('title');
+        if (!artistAttr) {
+          const titledEl = artistDiv.querySelector('[title]');
+          if (titledEl) {
+            artistAttr = titledEl.getAttribute('title');
+          }
+        }
+        
         if (artistAttr) {
           artists.push(artistAttr);
         } else {
@@ -180,7 +187,14 @@ function parsePlaylist(targetDoc = document) {
       if (cells.length >= 5) {
         const albumDiv = cells[4].querySelector('div.text');
         if (albumDiv) {
-          album = albumDiv.getAttribute('title') || albumDiv.innerText;
+          let albumAttr = albumDiv.getAttribute('title');
+          if (!albumAttr) {
+            const titledEl = albumDiv.querySelector('[title]');
+            if (titledEl) {
+              albumAttr = titledEl.getAttribute('title');
+            }
+          }
+          album = albumAttr || albumDiv.innerText;
         } else {
           const albumLink = cells[4].querySelector('a[href*="/album?id="]');
           if (albumLink) {
@@ -207,7 +221,14 @@ function parsePlaylist(targetDoc = document) {
       
       const artistDiv = row.querySelector('td:nth-child(4) div.text');
       if (artistDiv) {
-        const artistAttr = artistDiv.getAttribute('title');
+        let artistAttr = artistDiv.getAttribute('title');
+        if (!artistAttr) {
+          const titledEl = artistDiv.querySelector('[title]');
+          if (titledEl) {
+            artistAttr = titledEl.getAttribute('title');
+          }
+        }
+        
         if (artistAttr) {
           artists.push(artistAttr);
         } else {
@@ -225,7 +246,14 @@ function parsePlaylist(targetDoc = document) {
       
       const albumDiv = row.querySelector('td:nth-child(5) div.text');
       if (albumDiv) {
-        album = albumDiv.getAttribute('title') || albumDiv.innerText;
+        let albumAttr = albumDiv.getAttribute('title');
+        if (!albumAttr) {
+          const titledEl = albumDiv.querySelector('[title]');
+          if (titledEl) {
+            albumAttr = titledEl.getAttribute('title');
+          }
+        }
+        album = albumAttr || albumDiv.innerText;
       } else {
         const albumLink = row.querySelector('a[href*="/album?id="]');
         if (albumLink) {
@@ -252,13 +280,92 @@ function parsePlaylist(targetDoc = document) {
   return songs;
 }
 
-/**
- * 辅助函数：清理多余的空白字符及特殊字符
- */
 function cleanText(text) {
   if (!text) return "";
-  return text
-    .replace(/\r?\n|\r/g, " ") // 替换换行符为空格
-    .replace(/\s+/g, " ")      // 合并多个空格
+  
+  // 使用自定义的实体解码器，避开 innerHTML 赋值在 CSP/Trusted Types 下的报错限制
+  let decoded = decodeHtmlEntities(text);
+  
+  return decoded
+    .replace(/[\u200b\u200e\u200f\ufeff]/g, "") // 过滤掉零宽空格、排版控制字符及可能残留的 BOM 字符
+    .replace(/[\xa0\u3000]/g, " ")  // 将不换行空格 (\xa0) 和全角空格 (\u3000) 替换为标准的普通空格
+    .replace(/\r?\n|\r/g, " ")     // 替换换行符为空格
+    .replace(/\s+/g, " ")          // 合并多个空白字符
     .trim();
+}
+
+/**
+ * 自定义 HTML 实体解码器，安全且不依赖于 DOM 节点的 innerHTML 属性赋值，
+ * 可完美规避 CSP（内容安全策略）和 Trusted Types 限制。
+ */
+function decodeHtmlEntities(str) {
+  if (!str) return "";
+  
+  const entities = {
+    'amp': '&',
+    'lt': '<',
+    'gt': '>',
+    'quot': '"',
+    'apos': "'",
+    'nbsp': ' ',
+    'middot': '·',
+    'ldquo': '“',
+    'rdquo': '”',
+    'lsquo': '‘',
+    'rsquo': '’',
+    'bull': '•',
+    'deg': '°',
+    'sup2': '²',
+    'sup3': '³',
+    'copy': '©',
+    'reg': '®',
+    'trade': '™'
+  };
+
+  let result = str;
+
+  // 1. 十六进制数字实体, 例如 &#x5468; -> 周
+  result = result.replace(/&#[xX]([0-9a-fA-F]+);/g, (match, hex) => {
+    try {
+      return String.fromCharCode(parseInt(hex, 16));
+    } catch (e) {
+      return match;
+    }
+  });
+
+  // 2. 十进制数字实体, 例如 &#21608; -> 周
+  result = result.replace(/&#([0-9]+);/g, (match, dec) => {
+    try {
+      return String.fromCharCode(parseInt(dec, 10));
+    } catch (e) {
+      return match;
+    }
+  });
+
+  // 3. 命名 HTML 实体, 例如 &middot; -> · 或 &amp; -> &
+  result = result.replace(/&([a-zA-Z0-9]+);/g, (match, name) => {
+    const lowerName = name.toLowerCase();
+    if (entities.hasOwnProperty(lowerName)) {
+      return entities[lowerName];
+    }
+    return match; // 未知实体保持原样
+  });
+
+  // 4. 作为最后的安全兜底，使用不依赖当前文档上下文的 DOMParser 进行解析
+  try {
+    if (typeof DOMParser !== 'undefined') {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(result, 'text/html');
+      if (doc && doc.body) {
+        const docText = doc.body.textContent || doc.body.innerText;
+        if (docText) {
+          result = docText;
+        }
+      }
+    }
+  } catch (e) {
+    // 忽略异常
+  }
+
+  return result;
 }

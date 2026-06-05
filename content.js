@@ -124,7 +124,7 @@ function parsePlaylist(targetDoc = document) {
     items.forEach((item) => {
       let title = "";
       let artists = [];
-      let album = "个人听歌排行"; // 个人排行默认没有专辑名，置为默认标识
+      let album = ""; // 听歌排行默认没有专辑，直接置为空字符串
       
       // 提取歌曲标题，通常在 <b> 标签中，或含有 song?id= 的 a 标签
       const bTag = item.querySelector('b');

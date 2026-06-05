@@ -402,7 +402,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </label>
         <div class="song-details">
           <span class="song-title-text">${escapeHtml(song.title)}</span>
-          <span class="song-meta-text">${escapeHtml(song.artist)} - ${escapeHtml(song.album)}</span>
+          <span class="song-meta-text">${escapeHtml(song.artist)}${song.album ? ` - ${escapeHtml(song.album)}` : ''}</span>
         </div>
       `;
       
@@ -527,7 +527,11 @@ document.addEventListener("DOMContentLoaded", () => {
     
     songs.forEach((song, index) => {
       const padIndex = String(index + 1).padStart(String(songs.length).length, '0');
-      lines.push(`${padIndex}. ${song.title} - ${song.artist} (专辑: ${song.album})`);
+      if (song.album) {
+        lines.push(`${padIndex}. ${song.title} - ${song.artist} (专辑: ${song.album})`);
+      } else {
+        lines.push(`${padIndex}. ${song.title} - ${song.artist}`);
+      }
     });
     
     return lines.join("\n");
